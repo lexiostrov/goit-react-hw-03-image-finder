@@ -78,8 +78,13 @@ export class App extends Component {
       });
   };
 
+  // nextPage = () => {
+  //   this.setState(prevState => ({ page: prevState.page + 1 }));
+  // };
+
   nextPage = () => {
-    this.setState(prevState => ({ page: prevState.page + 1 }));
+    const { searchText, page } = this.state;
+    this.performSearch(searchText, page + 1);
   };
 
   openModal = e => {
