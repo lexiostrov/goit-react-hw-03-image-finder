@@ -24,84 +24,59 @@ export class App extends Component {
   };
 
   componentDidUpdate(prevProps, prevState) {
-    const searchText = this.state.searchText.trim();
+    const { searchText, page } = this.state;
+    const prevSearchText = prevState.searchText.trim();
+    const prevPage = prevState.page;
 
-    if (prevState.searchText !== searchText && searchText) {
-      this.setState({ isLoading: true, page: 1 });
-
-      getImages(searchText, 1)
-        .then(data => {
-          if (data.totalHits === 0) {
-            this.setState({ isLoading: false });
-            return Notiflix.Notify.info(
-              'Sorry, there are no images matching your search query. Please try again.'
-            );
-          }
-          if (data.totalHits <= 12) {
-            this.setState({ isLoading: false });
-            Notiflix.Notify.info(
-              "We're sorry, but you've reached the end of search results."
-            );
-          }
-          if (data.status === 'error') {
-            return Promise.reject(data.message);
-          } else if (data.totalHits > 0) {
-            this.setState({ isLoading: false });
-            Notiflix.Notify.success(
-              `Hooray! We found ${data.totalHits} images.`
-            );
-          }
-          const imgArr = data.hits.map(
-            ({ id, tags, webformatURL, largeImageURL }) => ({
-              id,
-              tags,
-              webformatURL,
-              largeImageURL,
-            })
-          );
-          this.setState({
-            images: imgArr,
-          });
-        })
-        .catch(error => {
-          this.setState({ error });
+    if (searchText !== prevSearchText || page !== prevPage) {
+      if (searchText && page === 1) {
+        this.performSearch(searchText, page);
+      } else if (searchText && page > 1) {
+        this.setState({ isLoading: true }, () => {
+          this.performSearch(searchText, page);
         });
-    }
-
-    if (prevState.page !== this.state.page && this.state.page !== 1) {
-      this.setState({ isLoading: true });
-      getImages(searchText, this.state.page)
-        .then(data => {
-          if (data.totalHits === 0) {
-            this.setState({ isLoading: false });
-            return Notiflix.Notify.info(
-              'Sorry, there are no images matching your search query. Please try again.'
-            );
-          }
-          if (Math.floor(data.totalHits / this.state.page) < 12) {
-            this.setState({ isLoading: false });
-            Notiflix.Notify.info(
-              "We're sorry, but you've reached the end of search results."
-            );
-          }
-
-          const imgArr = data.hits.map(
-            ({ id, tags, webformatURL, largeImageURL }) => ({
-              id,
-              tags,
-              webformatURL,
-              largeImageURL,
-            })
-          );
-          this.setState(prevState => ({
-            images: [...prevState.images, ...imgArr],
-          }));
-        })
-        .catch(error => {
-          this.setState({ error });
-        });
+      }
     }
   }
+
+  performSearch = (searchText, page) => {
+    getImages(searchText, page)
+      .then(data => {
+        if (data.totalHits === 0) {
+          this.setState({ isLoading: false });
+          return Notiflix.Notify.info(
+            'Sorry, there are no images matching your search query. Please try again.'
+          );
+        }
+
+        const imgArr = data.hits.map(
+          ({ id, tags, webformatURL, largeImageURL }) => ({
+            id,
+            tags,
+            webformatURL,
+            largeImageURL,
+          })
+        );
+
+        this.setState(prevState => ({
+          isLoading: false,
+          images: page === 1 ? imgArr : [...prevState.images, ...imgArr],
+        }));
+
+        if (page === 1) {
+          Notiflix.Notify.success(`Hooray! We found ${data.totalHits} images.`);
+        }
+
+        if (data.totalHits <= page * this.state.per_page) {
+          Notiflix.Notify.info(
+            "We're sorry, but you've reached the end of search results."
+          );
+        }
+      })
+      .catch(error => {
+        this.setState({ isLoading: false, error });
+      });
+  };
 
   nextPage = () => {
     this.setState(prevState => ({ page: prevState.page + 1 }));
