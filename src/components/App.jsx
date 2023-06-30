@@ -23,68 +23,85 @@ export class App extends Component {
     this.setState({ searchText });
   };
 
-  componentDidUpdate(prevProps, prevState) {
-    const { searchText, page } = this.state;
-    const prevSearchText = prevState.searchText.trim();
-    const prevPage = prevState.page;
+  handleNoImagesFound() {
+    this.setState({ isLoading: false });
+    Notiflix.Notify.info(
+      'Sorry, there are no images matching your search query. Please try again.'
+    );
+  }
 
-    if (searchText !== prevSearchText || page !== prevPage) {
-      if (searchText && page === 1) {
-        this.performSearch(searchText, page);
-      } else if (searchText && page > 1) {
-        this.setState({ isLoading: true }, () => {
-          this.performSearch(searchText, page);
+  handleEndOfSearchResults() {
+    this.setState({ isLoading: false });
+    Notiflix.Notify.info(
+      "We're sorry, but you've reached the end of search results."
+    );
+  }
+
+  transformImageData = data => {
+    return data.hits.map(({ id, tags, webformatURL, largeImageURL }) => ({
+      id,
+      tags,
+      webformatURL,
+      largeImageURL,
+    }));
+  };
+
+  componentDidUpdate(prevProps, prevState) {
+    const searchText = this.state.searchText.trim();
+
+    if (prevState.searchText !== searchText && searchText) {
+      this.setState({ isLoading: true, page: 1 });
+
+      getImages(searchText, 1)
+        .then(data => {
+          if (data.totalHits === 0) {
+            this.handleNoImagesFound();
+          }
+          if (data.totalHits <= 12) {
+            this.handleEndOfSearchResults();
+          }
+          if (data.status === 'error') {
+            return Promise.reject(data.message);
+          } else if (data.totalHits > 0) {
+            this.setState({ isLoading: false });
+            Notiflix.Notify.success(
+              `Hooray! We found ${data.totalHits} images.`
+            );
+          }
+          const imgArr = this.transformImageData(data);
+          this.setState({
+            images: imgArr,
+          });
+        })
+        .catch(error => {
+          this.setState({ error });
         });
-      }
+    }
+
+    if (prevState.page !== this.state.page && this.state.page !== 1) {
+      this.setState({ isLoading: true });
+      getImages(searchText, this.state.page)
+        .then(data => {
+          if (data.totalHits === 0) {
+            this.handleNoImagesFound();
+          }
+          if (Math.floor(data.totalHits / this.state.page) < 12) {
+            this.handleEndOfSearchResults();
+          }
+
+          const imgArr = this.transformImageData(data);
+          this.setState(prevState => ({
+            images: [...prevState.images, ...imgArr],
+          }));
+        })
+        .catch(error => {
+          this.setState({ error });
+        });
     }
   }
 
-  performSearch = (searchText, page) => {
-    getImages(searchText, page)
-      .then(data => {
-        if (data.totalHits === 0) {
-          this.setState({ isLoading: false });
-          return Notiflix.Notify.info(
-            'Sorry, there are no images matching your search query. Please try again.'
-          );
-        }
-
-        const imgArr = data.hits.map(
-          ({ id, tags, webformatURL, largeImageURL }) => ({
-            id,
-            tags,
-            webformatURL,
-            largeImageURL,
-          })
-        );
-
-        this.setState(prevState => ({
-          isLoading: false,
-          images: page === 1 ? imgArr : [...prevState.images, ...imgArr],
-        }));
-
-        if (page === 1) {
-          Notiflix.Notify.success(`Hooray! We found ${data.totalHits} images.`);
-        }
-
-        if (data.totalHits <= page * this.state.per_page) {
-          Notiflix.Notify.info(
-            "We're sorry, but you've reached the end of search results."
-          );
-        }
-      })
-      .catch(error => {
-        this.setState({ isLoading: false, error });
-      });
-  };
-
-  // nextPage = () => {
-  //   this.setState(prevState => ({ page: prevState.page + 1 }));
-  // };
-
   nextPage = () => {
-    const { searchText, page } = this.state;
-    this.performSearch(searchText, page + 1);
+    this.setState(prevState => ({ page: prevState.page + 1 }));
   };
 
   openModal = e => {
@@ -99,8 +116,8 @@ export class App extends Component {
   };
 
   toggleModal = () => {
-    this.setState(prevState => ({
-      showModal: !prevState.showModal,
+    this.setState(({ showModal }) => ({
+      showModal: !showModal,
     }));
   };
   onButtonVisible = () => {
